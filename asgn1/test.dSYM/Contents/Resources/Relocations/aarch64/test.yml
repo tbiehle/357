@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/travisbiehle/CPCS/CSC_357/asgn1/test'
+relocations:     []
+...
