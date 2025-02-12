@@ -138,9 +138,12 @@ void myfree(BYTE *addr)
     { // chunk is last chunk in list
         chunk *curr = fchunk;
         int size = curr->size;
-        if (curr->prev && ((chunk*)curr->prev)->occ == 0) // don't need to iterate since ideally that whole chunk would be merged
+        if (curr->prev) // don't need to iterate since ideally that whole chunk would be merged
         {
-            size += ((chunk*)curr->prev)->size;
+            if (((chunk*)curr->prev)->occ == 0)
+                size += ((chunk*)curr->prev)->size;
+            else
+                ((chunk*)curr->prev)->next = NULL;
         } else
         {
             startofheap = NULL;
