@@ -34,12 +34,10 @@ int main() // program 1 gets user input and creates shared memory
 
     while (true)
     {
+        memset(p, 0, 100 * sizeof(char));
         int n = read(STDIN_FILENO, p, 100 * sizeof(char));
-        for (int i = n; i < 100; i++)
-        {
-            p[i] = 0;
-        }
-        if (strquit(p)) break;
+        if (strcmp("quit\n", p) == 0) break;
+        sleep(1);
     }  
 
     close(fd);
