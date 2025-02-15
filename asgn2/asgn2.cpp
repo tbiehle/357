@@ -39,13 +39,18 @@ struct bih
     int biClrImportant;
 };
 
+// BYTE get_red(BYTE *imgdata, float x, float y, int img, int imgh)
+//     {
+    
+//     }
+
 int main()
 {
     bfh bfh1, bfh2;
     bih bih1, bih2;
 
-    FILE *img1 = fopen("flowers.bmp", "rb");
-    FILE *img2 = fopen("wolf.bmp", "rb");
+    FILE *img1 = fopen("test2.bmp", "rb");
+    FILE *img2 = fopen("test1.bmp", "rb");
 
     // read header info of img1
     fread(&bfh1.bfType, 2, 1, img1);
@@ -130,50 +135,81 @@ int main()
     fwrite(&infoh.biClrUsed, 4, 1, outfile);
     fwrite(&infoh.biClrImportant, 4, 1, outfile);
 
-    int wib = 3 * infoh.biWidth; // width in bytes: biWidth is width in pixels
+    int wib = 3 * infohsmall.biWidth; // width in bytes: biWidth is width in pixels
     int padding = (4 - wib % 4) % 4;
-    int rwib = wib + padding; // account for padding
+    int rwib_sm = wib + padding; // account for padding
 
-    wib = 3 * infohsmall.biWidth;
+    wib = 3 * infoh.biWidth;
     padding = (4 - wib % 4) % 4;
-    int rwib_sm = wib + padding;
+    int rwib = wib + padding;
+
+    float size_ratio = (float)infohsmall.biWidth / (float)infoh.biWidth;
 
     for (int y = 0; y < infoh.biHeight; y++)
         {
         for (int x = 0; x < infoh.biWidth; x++)
             {
+                float fxs = (float) x * size_ratio; // x cords of small img in terms of big img
+                float fys = (float) y * size_ratio; // y of small i.t.o. big
+
+                float t_x = fxs - (int) fxs; // delta value x
+                float t_y = fys - (int) fys; // delta value y
+                
                 BYTE *pix = &bigdata[3 * x + y * rwib];
 
-                BYTE br, ir;
+                BYTE br, ir, bg, ig, bb, ib;
                 br = ir = pix[2];
-                BYTE bg, ig;
                 bg = ig = pix[1];
-                BYTE bb, ib;
                 bb = ib = pix[0];
 
+                BYTE *pixbl = &bigdata[3 * x + y * rwib]; // bottom left pixel surrounding small pixel
 
-                if (x < infohsmall.biWidth && y < infohsmall.biHeight) // within bounds of small image
+                BYTE *pixbr = pixbl; // bottom right pixel surrounding small pixel
+                if (x < infoh.biWidth)
                     {
-                    BYTE *pixsm = &smalldata[3 * x + y * rwib_sm];
-
-                    BYTE sr = pixsm[2];
-                    BYTE sg = pixsm[1];
-                    BYTE sb = pixsm[0];
-
-                    float ratio = 0.3;
-                    ir = br * (1 - ratio) + sr * ratio;
-                    ig = bg * (1 - ratio) + sg * ratio;
-                    ib = bb * (1 - ratio) + sb * ratio;
+                    pixbr = &bigdata[3 * (x + 1) + y * rwib]; 
+                    }
+                
+                BYTE *pixtl = pixbl; // top left pixel 
+                if (y < infoh.biHeight)
+                    {
+                    pixtl = &bigdata[3 * x + (y + 1) * rwib];
                     }
 
-                // do some stuff
-                
+                BYTE *pixtr = pixbl; // top right pixel
+                if (x < infoh.biWidth && y < infoh.biHeight)
+                    {
+                    pixtr = &bigdata[3 * (x + 1) + (y + 1) * rwib];
+                    }
+
+
+                // if (x < infohsmall.biWidth && y < infohsmall.biHeight) // within bounds of small image
+                //     {
+                //     BYTE *pixsm = &smalldata[3 * x + y * rwib_sm];
+
+                //     BYTE sr = pixsm[2];
+                //     BYTE sg = pixsm[1];
+                //     BYTE sb = pixsm[0];
+
+                //     float ratio = 0.5;
+                //     ir = br * (1 - ratio) + sr * ratio;
+                //     ig = bg * (1 - ratio) + sg * ratio;
+                //     ib = bb * (1 - ratio) + sb * ratio;
+                //     }
+
+                ir = br * (1 - t_x);
+                ig = bg * (1 - t_x);
+                ib = bb * (1 - t_x);
 
                 pix[2] = ir;
                 pix[1] = ig;
                 pix[0] = ib;
 
                 fwrite(pix, 3, 1, outfile);
+            }
+            for (int i = 0; i < padding; i++)
+            {
+                fputc(0, outfile);
             }
         }
 
