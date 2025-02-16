@@ -39,9 +39,9 @@ struct bih
     int biClrImportant;
 };
 
-BYTE interp_color(BYTE **surr_pix, int col, float t_x, float t_y)
+BYTE interp_color(BYTE **surr_pix, int col, float dx, float dy)
     {
-    return (1 - t_x)*(1 - t_y)*surr_pix[0b00][col] + t_x*(1-t_y)*surr_pix[0b10][col] + (1-t_x)*t_y*surr_pix[0b01][col] + t_x*t_y* surr_pix[0b11][col];
+    return (1 - dx)*(1 - dy)*surr_pix[0b00][col] + dx*(1-dy)*surr_pix[0b10][col] + (1-dx)*dy*surr_pix[0b01][col] + dx*dy* surr_pix[0b11][col];
     }
 
 void get_neighbor_pix(BYTE *neighbors[4], BYTE *data, int x, int y, int w, int h, int rwib)
@@ -81,9 +81,9 @@ int main()
     bfh bfh1, bfh2;
     bih bih1, bih2;
 
-    FILE *img1 = fopen("wolf.bmp", "rb");
+    FILE *img1 = fopen("mario.bmp", "rb");
     FILE *img2 = fopen("tunnel.bmp", "rb");
-    float ratio = 0.3;
+    float ratio = 0.5;
 
     // read header info of img1
     fread(&bfh1.bfType, 2, 1, img1);
@@ -179,6 +179,7 @@ int main()
     float w_size_ratio = (float)infohsmall.biWidth / (float)infoh.biWidth;
     float h_size_ratio = (float)infohsmall.biHeight / (float)infoh.biHeight;
 
+    //clock_t s_time = clock();
     for (int y = 0; y < infoh.biHeight; y++)
         {
         for (int x = 0; x < infoh.biWidth; x++)
@@ -188,13 +189,13 @@ int main()
                 float fys = (float) y * h_size_ratio; // y of small i.t.o. big
                 int iys = (int) fys;
 
-                float t_x = fxs - ixs; // delta value x
-                float t_y = fys - iys; // delta value y
+                float dx = fxs - ixs; // delta value x
+                float dy = fys - iys; // delta value y
                 
                 BYTE *pix = &bigdata[3 * x + y * rwib];
                 
                 BYTE i_big[3];
-                BYTE big[3] = {pix[2], pix[1], pix[0]};
+                BYTE big[3] = {pix[0], pix[1], pix[2]};
 
                 BYTE *surr_pix[4];
                 get_neighbor_pix(surr_pix, smalldata, ixs, iys, infohsmall.biWidth, infohsmall.biHeight, rwib_sm); // four surrounding pixels
@@ -202,7 +203,7 @@ int main()
                 BYTE i_small[3];
                 for (int i = 0; i < 3; i++)
                     {
-                    i_small[i] = interp_color(surr_pix, i, t_x, t_y);
+                    i_small[i] = interp_color(surr_pix, i, dx, dy);
                     pix[i] = big[i] * (1 - ratio) + ratio * i_small[i];
                     }
 
@@ -213,6 +214,8 @@ int main()
                 fputc(0, outfile);
             }
         }
+    //clock_t f_time = clock();
+    //cout << "total time: " << f_time - s_time << endl;
 
     free(bigdata);
     free(smalldata);
