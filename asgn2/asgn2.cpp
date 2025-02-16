@@ -39,18 +39,51 @@ struct bih
     int biClrImportant;
 };
 
-// BYTE get_red(BYTE *imgdata, float x, float y, int img, int imgh)
-//     {
+BYTE interp_color(BYTE **surr_pix, int col, float t_x, float t_y)
+    {
+    return (1 - t_x)*(1 - t_y)*surr_pix[0b00][col] + t_x*(1-t_y)*surr_pix[0b10][col] + (1-t_x)*t_y*surr_pix[0b01][col] + t_x*t_y* surr_pix[0b11][col];
+    }
+
+void get_neighbor_pix(BYTE *neighbors[4], BYTE *data, int x, int y, int w, int h, int rwib)
+{
+    // IMPORTANT
+    // bottom left : 00 = 0
+    // bottom right : 10 = 2
+    // top left : 01 = 1
+    // top right : 11 = 3
     
-//     }
+    neighbors[0b00] = &data[3 * x + y * rwib]; // bottom left pixel surrounding small pixel
+    neighbors[0b10] = neighbors[0b00]; // initialize to bottom left
+    neighbors[0b01] = neighbors[0b00]; // initialize to bottom left
+    neighbors[0b11] = neighbors[0b00]; // initialize to bottom left
+
+    // bottom right pixel surrounding small pixel
+    if (x < w - 1)
+    {
+        neighbors[0b10] = &data[3 * (x + 1) + y * rwib]; 
+    }
+    
+    // top left pixel 
+    if (y < h - 1)
+    {
+        neighbors[0b01] = &data[3 * x + (y + 1) * rwib];
+    }
+
+    // top right pixel
+    if (x < w - 1 && y < h - 1)
+    {
+        neighbors[0b11] = &data[3 * (x + 1) + (y + 1) * rwib];
+    }
+}
 
 int main()
 {
     bfh bfh1, bfh2;
     bih bih1, bih2;
 
-    FILE *img1 = fopen("test2.bmp", "rb");
-    FILE *img2 = fopen("test1.bmp", "rb");
+    FILE *img1 = fopen("wolf.bmp", "rb");
+    FILE *img2 = fopen("tunnel.bmp", "rb");
+    float ratio = 0.3;
 
     // read header info of img1
     fread(&bfh1.bfType, 2, 1, img1);
@@ -143,67 +176,35 @@ int main()
     padding = (4 - wib % 4) % 4;
     int rwib = wib + padding;
 
-    float size_ratio = (float)infohsmall.biWidth / (float)infoh.biWidth;
+    float w_size_ratio = (float)infohsmall.biWidth / (float)infoh.biWidth;
+    float h_size_ratio = (float)infohsmall.biHeight / (float)infoh.biHeight;
 
     for (int y = 0; y < infoh.biHeight; y++)
         {
         for (int x = 0; x < infoh.biWidth; x++)
             {
-                float fxs = (float) x * size_ratio; // x cords of small img in terms of big img
-                float fys = (float) y * size_ratio; // y of small i.t.o. big
+                float fxs = (float) x * w_size_ratio; // x cords of big img in terms of small
+                int ixs = (int) fxs;
+                float fys = (float) y * h_size_ratio; // y of small i.t.o. big
+                int iys = (int) fys;
 
-                float t_x = fxs - (int) fxs; // delta value x
-                float t_y = fys - (int) fys; // delta value y
+                float t_x = fxs - ixs; // delta value x
+                float t_y = fys - iys; // delta value y
                 
                 BYTE *pix = &bigdata[3 * x + y * rwib];
-
-                BYTE br, ir, bg, ig, bb, ib;
-                br = ir = pix[2];
-                bg = ig = pix[1];
-                bb = ib = pix[0];
-
-                BYTE *pixbl = &bigdata[3 * x + y * rwib]; // bottom left pixel surrounding small pixel
-
-                BYTE *pixbr = pixbl; // bottom right pixel surrounding small pixel
-                if (x < infoh.biWidth)
-                    {
-                    pixbr = &bigdata[3 * (x + 1) + y * rwib]; 
-                    }
                 
-                BYTE *pixtl = pixbl; // top left pixel 
-                if (y < infoh.biHeight)
+                BYTE i_big[3];
+                BYTE big[3] = {pix[2], pix[1], pix[0]};
+
+                BYTE *surr_pix[4];
+                get_neighbor_pix(surr_pix, smalldata, ixs, iys, infohsmall.biWidth, infohsmall.biHeight, rwib_sm); // four surrounding pixels
+
+                BYTE i_small[3];
+                for (int i = 0; i < 3; i++)
                     {
-                    pixtl = &bigdata[3 * x + (y + 1) * rwib];
+                    i_small[i] = interp_color(surr_pix, i, t_x, t_y);
+                    pix[i] = big[i] * (1 - ratio) + ratio * i_small[i];
                     }
-
-                BYTE *pixtr = pixbl; // top right pixel
-                if (x < infoh.biWidth && y < infoh.biHeight)
-                    {
-                    pixtr = &bigdata[3 * (x + 1) + (y + 1) * rwib];
-                    }
-
-
-                // if (x < infohsmall.biWidth && y < infohsmall.biHeight) // within bounds of small image
-                //     {
-                //     BYTE *pixsm = &smalldata[3 * x + y * rwib_sm];
-
-                //     BYTE sr = pixsm[2];
-                //     BYTE sg = pixsm[1];
-                //     BYTE sb = pixsm[0];
-
-                //     float ratio = 0.5;
-                //     ir = br * (1 - ratio) + sr * ratio;
-                //     ig = bg * (1 - ratio) + sg * ratio;
-                //     ib = bb * (1 - ratio) + sb * ratio;
-                //     }
-
-                ir = br * (1 - t_x);
-                ig = bg * (1 - t_x);
-                ib = bb * (1 - t_x);
-
-                pix[2] = ir;
-                pix[1] = ig;
-                pix[0] = ib;
 
                 fwrite(pix, 3, 1, outfile);
             }
