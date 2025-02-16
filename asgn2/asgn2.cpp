@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <fcntl.h>
-#include <libc.h>
+#include <ctime>
 
 using namespace std;
 
@@ -76,6 +76,7 @@ void get_neighbor_pix(BYTE *neighbors[4], BYTE *data, int x, int y, int w, int h
     }
 }
 
+
 int main()
 {
     bfh bfh1, bfh2;
@@ -84,6 +85,7 @@ int main()
     FILE *img1 = fopen("mario.bmp", "rb");
     FILE *img2 = fopen("tunnel.bmp", "rb");
     float ratio = 0.5;
+    int num_processes = 2;
 
     // read header info of img1
     fread(&bfh1.bfType, 2, 1, img1);
@@ -179,7 +181,8 @@ int main()
     float w_size_ratio = (float)infohsmall.biWidth / (float)infoh.biWidth;
     float h_size_ratio = (float)infohsmall.biHeight / (float)infoh.biHeight;
 
-    //clock_t s_time = clock();
+    clock_t s_time = clock();
+
     for (int y = 0; y < infoh.biHeight; y++)
         {
         for (int x = 0; x < infoh.biWidth; x++)
@@ -214,8 +217,10 @@ int main()
                 fputc(0, outfile);
             }
         }
-    //clock_t f_time = clock();
-    //cout << "total time: " << f_time - s_time << endl;
+
+    wait(0);
+    clock_t f_time = clock();
+    cout << "total time: " << (double) (f_time - s_time) << endl;
 
     free(bigdata);
     free(smalldata);
