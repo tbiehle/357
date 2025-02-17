@@ -77,16 +77,73 @@ void get_neighbor_pix(BYTE *neighbors[4], BYTE *data, int x, int y, int w, int h
     }
 }
 
+bool is_bmp(string name)
+    {
+    string bmp = ".bmp";
+
+    int length = name.length();
+    if (length <= 4) return false;
+
+    if (name.compare(length-4, 4, bmp) == 0) return true;
+
+    return false;
+    }
+
 
 int main(int argc, char *argv[])
-{
+    {
     bfh bfh1, bfh2;
     bih bih1, bih2;
+    bool manual = false;
 
-    FILE *img1 = fopen("mario.bmp", "rb");
-    FILE *img2 = fopen("tunnel.bmp", "rb");
-    float ratio = 0.5;
-    int num_processes = 4;
+    char *file1 = argv[1];
+    char *file2 = argv[2];
+    char *outname = argv[5];
+    
+    string file1_str = file1;
+    string file2_str = file2;
+    string outname_str = outname;
+
+    if (!is_bmp(file1_str) || !is_bmp(file2_str))
+        {
+        cout << "Invalid input file name: try [filename].bmp\n" << endl;
+        manual = true;
+        }
+    if (!is_bmp(outname_str))
+        {
+        cout << "Invalid output file name: try [filename].bmp\n" << endl;
+        manual = true;
+        }
+
+    float ratio = atof(argv[3]);
+    if (ratio < 0 || ratio > 1)
+        {
+        cout << "Invalid interpolation ratio: try [0-1]\n" <<endl;
+        manual = true;
+        }
+
+    int num_processes = atoi(argv[4]);
+    if (num_processes < 1 || num_processes > 4)
+        {
+        cout << "Invalid number of processes: try an integer 1-4\n" << endl;
+        manual = true;
+        }
+
+
+
+    if (manual)
+    {
+        cout << "--------------------- User manual ---------------------" << endl;
+        cout << "command line argument 1: input file 1 name - [name].bmp" << endl;
+        cout << "command line argument 2: input file 2 name - [name].bmp" << endl;
+        cout << "command line argument 3: interpolation ratio - [0-1]" << endl;
+        cout << "command line argument 4: number of processes - [1-4] " << endl;
+        cout << "command line argument 5: output file name - [name].bmp" << endl;
+        return -1;
+    }
+
+    FILE *img1 = fopen(file1, "rb");
+    FILE *img2 = fopen(file2, "rb");
 
     // read header info of img1
     fread(&bfh1.bfType, 2, 1, img1);
@@ -136,6 +193,7 @@ int main(int argc, char *argv[])
         fileh = bfh1;
         infohsmall = bih2;
         filehsmall = bfh2;
+        ratio = 1 - ratio;
         }
     else // img2 bigger than img1
         {
@@ -216,7 +274,7 @@ int main(int argc, char *argv[])
 
     while ((wpid = wait(&status)) > 0);
 
-    FILE *outfile = fopen("outimg.bmp", "wb"); // create output file 
+    FILE *outfile = fopen(outname, "wb"); // create output file 
     // write info from bigger image into outfile header
     fwrite(&fileh.bfType, 2, 1, outfile);
     fwrite(&fileh.bfSize, 4, 1, outfile);
