@@ -129,7 +129,15 @@ int main(int argc, char *argv[])
         manual = true;
         }
 
+    FILE *img1 = fopen(file1, "rb");
+    FILE *img2 = fopen(file2, "rb");
+    FILE *outfile = fopen(outname, "wb"); // create output file 
 
+    if (!img1 || !img2 || !outfile)
+    {
+        cout << "One or more files could not be opened, make sure the input files exist!\n" << endl;
+        manual = true;
+    }
 
     if (manual)
     {
@@ -141,9 +149,6 @@ int main(int argc, char *argv[])
         cout << "command line argument 5: output file name - [name].bmp" << endl;
         return -1;
     }
-
-    FILE *img1 = fopen(file1, "rb");
-    FILE *img2 = fopen(file2, "rb");
 
     // read header info of img1
     fread(&bfh1.bfType, 2, 1, img1);
@@ -193,7 +198,9 @@ int main(int argc, char *argv[])
         fileh = bfh1;
         infohsmall = bih2;
         filehsmall = bfh2;
-        ratio = 1 - ratio;
+        ratio = 1 - ratio; 
+        // need to flip ratio since the given ratio since ratio should compute how much of first image to display
+        // e.g. if ratio is 0.3, want 30% img1 and 70% img2
         }
     else // img2 bigger than img1
         {
@@ -205,45 +212,49 @@ int main(int argc, char *argv[])
         filehsmall = bfh1;
         }
     
-    //BYTE *bigdata = (BYTE *)malloc(fileh.bfSize); // allocate space to store data of big image
+    // allocate space to store data of big image
     BYTE *bigdata = (BYTE *)mmap(NULL, fileh.bfSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     fread(bigdata, fileh.bfSize, 1, bfile);
+    // data for small image
     BYTE *smalldata = (BYTE *)mmap(NULL, filehsmall.bfSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     fread(smalldata, filehsmall.bfSize, 1, sfile);
+    // data for output image
     BYTE *outdata = (BYTE *)mmap(NULL, fileh.bfSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
-    int wib = 3 * infohsmall.biWidth; // width in bytes: biWidth is width in pixels
-    int padding = (4 - wib % 4) % 4;
-    int rwib_sm = wib + padding; // account for padding
+    int wib = 3 * infohsmall.biWidth; // width in bytes per row of small image: biWidth is width in pixels
+    int padding = (4 - wib % 4) % 4; // padding on each row
+    int rwib_sm = wib + padding; // full width in bytes of small image, accounting for padding
 
-    wib = 3 * infoh.biWidth;
+    wib = 3 * infoh.biWidth; // wib big image
     padding = (4 - wib % 4) % 4;
-    int rwib = wib + padding;
+    int rwib = wib + padding; // full width in bytes per row of big image
 
-    float w_size_ratio = (float)infohsmall.biWidth / (float)infoh.biWidth;
-    float h_size_ratio = (float)infohsmall.biHeight / (float)infoh.biHeight;
+    float w_ratio = (float)infohsmall.biWidth / (float)infoh.biWidth; // width ratio: small / big
+    float h_ratio = (float)infohsmall.biHeight / (float)infoh.biHeight; // heigh ratio: small / big
 
-    clock_t s_time = clock();
+    timespec s_time; // initial time 
+    clock_gettime(CLOCK_MONOTONIC, &s_time); 
 
-    pid_t child_pid, wpid;
+    pid_t child_pid, wpid; // for forking purposes
     int status = 0;
 
-    int rows_per_process = infoh.biHeight / num_processes;
+    int rows_per_process = infoh.biHeight / num_processes; // calculate amount of data each process needs to process
     for (int j = 0; j < num_processes; j++)
         {
         child_pid = fork();
         if (child_pid == 0)
             {
-            int start_row = j * rows_per_process;
-            int end_row = (j == num_processes - 1) ? infoh.biHeight : (j + 1) * rows_per_process;
+            int start_row = j * rows_per_process; // where to retrieve and modify data
+            int end_row = (j == num_processes - 1) ? infoh.biHeight : (j + 1) * rows_per_process; // where to stop
+            // important that the last process continues to the full height of the image to account for leftover pixels in row calculations
             
             for (int y = start_row; y < end_row; y++)
                 {
                 for (int x = 0; x < infoh.biWidth; x++)
                     {
-                    float fxs = (float) x * w_size_ratio; // x cords of big img in terms of small
+                    float fxs = (float) x * w_ratio; // x cords of big img in terms of small
                     int ixs = (int) fxs;
-                    float fys = (float) y * h_size_ratio; // y of small i.t.o. big
+                    float fys = (float) y * h_ratio; // y of small i.t.o. big
                     int iys = (int) fys;
 
                     float dx = fxs - ixs; // delta value x
@@ -253,17 +264,17 @@ int main(int argc, char *argv[])
                     BYTE *pix = &bigdata[pix_idx];
                     
                     BYTE i_big[3];
-                    BYTE big[3] = {pix[0], pix[1], pix[2]};
+                    BYTE big[3] = {pix[0], pix[1], pix[2]}; // grb values of pixel
 
-                    BYTE *surr_pix[4];
+                    BYTE *surr_pix[4]; // array for surrounding pixels
                     get_neighbor_pix(surr_pix, smalldata, ixs, iys, infohsmall.biWidth, infohsmall.biHeight, rwib_sm); // four surrounding pixels
 
-                    BYTE i_small[3];
+                    BYTE i_small[3]; // grb values of small pixel
                     for (int i = 0; i < 3; i++)
                         {
-                        i_small[i] = interp_color(surr_pix, i, dx, dy);
-                        pix[i] = big[i] * (1 - ratio) + ratio * i_small[i];
-                        outdata[pix_idx + i] = pix[i];
+                        i_small[i] = interp_color(surr_pix, i, dx, dy); // computer bilinear interpolation for small image
+                        pix[i] = big[i] * (1 - ratio) + ratio * i_small[i]; // compute linear interpolation for image mixing
+                        outdata[pix_idx + i] = pix[i]; // write the final computed values to output data array
                         }
                     }
                 }
@@ -272,9 +283,8 @@ int main(int argc, char *argv[])
             }
         }
 
-    while ((wpid = wait(&status)) > 0);
+    while ((wpid = wait(&status)) > 0); // collect child process
 
-    FILE *outfile = fopen(outname, "wb"); // create output file 
     // write info from bigger image into outfile header
     fwrite(&fileh.bfType, 2, 1, outfile);
     fwrite(&fileh.bfSize, 4, 1, outfile);
@@ -292,13 +302,22 @@ int main(int argc, char *argv[])
     fwrite(&infoh.biYPelsPerMeter, 4, 1, outfile);
     fwrite(&infoh.biClrUsed, 4, 1, outfile);
     fwrite(&infoh.biClrImportant, 4, 1, outfile);
+
+    // write computed data to output file
     fwrite(outdata, fileh.bfSize, 1, outfile);
 
-    clock_t f_time = clock();
-    cout << "total time: " << (double) (f_time - s_time) << endl;
+    timespec f_time; // get final time 
+    clock_gettime(CLOCK_MONOTONIC, &f_time);
+    long elapsed_time_ns = (f_time.tv_nsec - s_time.tv_nsec);
+    cout << "total time: " << elapsed_time_ns << " microseconds" << endl;
+    // code for getting clock resolution
+    // timespec res;
+    // clock_getres(CLOCK_MONOTONIC, &res);
+    // cout << res.tv_nsec << endl;
 
     munmap(bigdata, sizeof(bigdata));
     munmap(smalldata, sizeof(smalldata));
+    munmap(outdata, sizeof(outdata));
     fclose(img1);
     fclose(img2);
     fclose(outfile);
