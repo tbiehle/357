@@ -95,6 +95,7 @@ int main(int argc, char *argv[])
     bfh bfh1, bfh2;
     bih bih1, bih2;
     bool manual = false;
+    bool valid_out = true;
 
     char *file1 = argv[1];
     char *file2 = argv[2];
@@ -113,6 +114,7 @@ int main(int argc, char *argv[])
         {
         cout << "Invalid output file name: try [filename].bmp\n" << endl;
         manual = true;
+        valid_out = false; // prevent output file creation
         }
 
     float ratio = atof(argv[3]);
@@ -129,16 +131,6 @@ int main(int argc, char *argv[])
         manual = true;
         }
 
-    FILE *img1 = fopen(file1, "rb");
-    FILE *img2 = fopen(file2, "rb");
-    FILE *outfile = fopen(outname, "wb"); // create output file 
-
-    if (!img1 || !img2 || !outfile)
-    {
-        cout << "One or more files could not be opened, make sure the input files exist!\n" << endl;
-        manual = true;
-    }
-
     if (manual)
     {
         cout << "--------------------- User manual ---------------------" << endl;
@@ -147,6 +139,15 @@ int main(int argc, char *argv[])
         cout << "command line argument 3: interpolation ratio - [0-1]" << endl;
         cout << "command line argument 4: number of processes - [1-4] " << endl;
         cout << "command line argument 5: output file name - [name].bmp" << endl;
+        return -1;
+    }
+
+    FILE *img1 = fopen(file1, "rb");
+    FILE *img2 = fopen(file2, "rb");
+
+    if (!img1 || !img2)
+    {
+        cout << "One or more files could not be opened, make sure the input files exist!\n" << endl;
         return -1;
     }
 
@@ -284,6 +285,14 @@ int main(int argc, char *argv[])
         }
 
     while ((wpid = wait(&status)) > 0); // collect child process
+
+    FILE *outfile = NULL;
+    if (valid_out) {outfile = fopen(outname, "wb");} else {outfile = NULL;} // create output file 
+    if (!outfile)
+        {
+        cout << "Output file could not be created" << endl;
+        return -1;
+        }
 
     // write info from bigger image into outfile header
     fwrite(&fileh.bfType, 2, 1, outfile);
