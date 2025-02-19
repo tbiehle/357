@@ -1,0 +1,12 @@
+# Ignore C++ executables and object files
+*.exe
+*.out
+*.o
+
+# Ignore debugging symbol files
+*.dSYM/
+*.dSYM/**
+
+# Ignore VS Code files
+.vscode/
+*.code-workspace
