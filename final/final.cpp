@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <fstream>
 #include <time.h>
+#include <sys/mman.h>
 
 
 typedef unsigned char BYTE;
@@ -72,6 +73,21 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // get and sterilize output filename from command line
+    char outfilename[100];
+    strcpy(outfilename, argv[2]);
+    int len;
+    for (int i = 0; i < 100; i++) {
+        if (outfilename[i] == 0) {
+            len = i;
+            break;
+        }
+    }
+    if (len < 5 || strcmp(outfilename + len - 4, ".bmp") != 0) {
+        cerr << "invalid output filename" << endl;
+        return -1;
+    }
+
     bfh bfh;
     bih bih;
 
@@ -94,48 +110,47 @@ int main(int argc, char *argv[]) {
     fread(&bih.biClrUsed, 4, 1, compfile);
     fread(&bih.biClrImportant, 4, 1, compfile);
 
+    int *batch_amts = (int *)mmap(NULL, sizeof(int) * 3, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     // read batch amounts from compressed file
     int red_amts, green_amts, blue_amts;
     fread(&red_amts, sizeof(int), 1, compfile);
     fread(&green_amts, sizeof(int), 1, compfile);
     fread(&blue_amts, sizeof(int), 1, compfile);
     // store batch amounts in array
-    int batch_amts[] = {red_amts, green_amts, blue_amts};
+    batch_amts[2] = red_amts;
+    batch_amts[1] = green_amts;
+    batch_amts[0] = blue_amts;
 
     // read batches from compressed file
-    batch red[red_amts], green[green_amts], blue[blue_amts];
+    batch *red = (batch *)mmap(NULL, sizeof(batch) * red_amts, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    batch *green = (batch *)mmap(NULL, sizeof(batch) * green_amts, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    batch *blue = (batch *)mmap(NULL, sizeof(batch) * blue_amts, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     fread(red, sizeof(batch), red_amts, compfile);
+
     fread(green, sizeof(batch), green_amts, compfile);
     fread(blue, sizeof(batch), blue_amts, compfile);
     // store batch arrays in array
-    batch *batches[] = {red, green, blue};
+    batch **batches = (batch **)mmap(NULL, sizeof(batch *) * 3, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    batches[2] = red;
+    batches[1] = green;
+    batches[0] = blue;
 
     // calculate rwib
     rwib = 3 * bih.biWidth + (4 - (3 * bih.biWidth) % 4) % 4;
 
     // allocate output data array
-    BYTE data[bih.biSizeImage];
+    BYTE *data = (BYTE *)mmap(NULL, bih.biSizeImage, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
     // decompress batches and write to data array
     for (int i = 0; i < 3; i++) {
-        write_batch(data, batch_amts[i], batches[i], 2 - i);
-    }
-
-    // get and sterilize output filename from command line and open it
-    char outfilename[100];
-    strcpy(outfilename, argv[2]);
-    int len;
-    for (int i = 0; i < 100; i++) {
-        if (outfilename[i] == 0) {
-            len = i;
-            break;
+        if (fork() == 0) {
+            write_batch(data, batch_amts[i], batches[i], i);
+            return 0;
         }
     }
-    if (len < 5 || strcmp(outfilename + len - 4, ".bmp") != 0) {
-        cerr << "invalid output filename" << endl;
-        return -1;
-    }
+    wait(0);
 
+    // open output file
     FILE *outfile = fopen(outfilename, "wb");
     if (!outfile) {
         cerr << "error opening input file" << endl;
@@ -172,6 +187,13 @@ int main(int argc, char *argv[]) {
 
     cout << "finished decompression" << endl;
     cout << "total time: " << elapsed_time << " milliseconds" << endl;
+
+    munmap(batch_amts, sizeof(int) * 3);
+    munmap(batches, sizeof(batch*) * 3);
+    munmap(red, sizeof(batch) * red_amts);
+    munmap(green, sizeof(batch) * green_amts);
+    munmap(blue, sizeof(batch) * blue_amts);
+    munmap(data, bih.biSizeImage);
 
     return 0;
 }
