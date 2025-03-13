@@ -48,11 +48,14 @@ public:
 void write_batch(BYTE *data, int batch_amt, batch* batches, int col_idx) {
     for (int i = 0; i < batch_amt; i++) {
         batch curr_batch = batches[i];
+
+        // get all info from current batch
         int start = curr_batch.start;
         int end = curr_batch.end;
         int y = curr_batch.line;
         BYTE val = curr_batch.val;
 
+        // write value to correct data interval
         for (int x = curr_batch.start; x < curr_batch.end; x++) {
             data[y * rwib + x * 3 + col_idx] = val;
         }
@@ -141,9 +144,10 @@ int main(int argc, char *argv[]) {
     // allocate output data array
     BYTE *data = (BYTE *)mmap(NULL, bih.biSizeImage, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
-    // decompress batches and write to data array
+    // split into 3 processes
     for (int i = 0; i < 3; i++) {
         if (fork() == 0) {
+            // decompress batch and write to data array
             write_batch(data, batch_amts[i], batches[i], i);
             return 0;
         }
